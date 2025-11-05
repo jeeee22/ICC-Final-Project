@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>운석 버튼 예제</title>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.0/lib/p5.min.js"></script>
+</head>
+<body style="margin:0; overflow:hidden;">
+<script>
+  let x, y, speed;
+  let landed = false;
+  let buttonSize = 80;
+
+  function setup() {
+    createCanvas(windowWidth, windowHeight);
+    x = random(100, width - 100);
+    y = -50;
+    speed = random(3, 6);
+    textAlign(CENTER, CENTER);
+  }
+
+  function draw() {
+    background(10, 10, 30);
+
+    // 별 배경
+    for (let i = 0; i < 100; i++) {
+      stroke(255);
+      point(random(width), random(height));
+    }
+
+    // 운석 그리기
+    noStroke();
+    fill(255, 180, 0);
+    ellipse(x, y, buttonSize, buttonSize);
+
+    if (!landed) {
+      y += speed;
+      if (y + buttonSize / 2 >= height - 60) {
+        landed = true;
+      }
+    } else {
+      fill(255);
+      textSize(24);
+      text("누르면 다음 페이지로 ➜", width / 2, height - 100);
+    }
+
+    // 지표면
+    fill(50, 100, 150);
+    rect(0, height - 60, width, 60);
+  }
+
+  function mousePressed() {
+    if (landed) {
+      let d = dist(mouseX, mouseY, x, y);
+      if (d < buttonSize / 2) {
+        // 다음 페이지로 이동
+        window.location.href = "next.html";
+      }
+    }
+  }
+
+  function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+  }
+</script>
+</body>
+</html>
