@@ -2,32 +2,306 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>다음 페이지</title>
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.0/lib/p5.min.js"></script>
+  <title>Life Cycle Particles</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
 </head>
-<body style="margin:0; overflow:hidden;">
+<body>
 <script>
+  const NUM_PARTICLES = 1000;   // 전체 입자 수
+  const NUM_STAGES = 7;         // 단계 (0~6)
+
+  let particles = [];            // 실제 입자
+  let stageTargets = [];         // 각 단계에서의 목표 좌표 저장
+  let slider;                    // 아래쪽 슬라이더
+
+  // 사용할 이미지
+  let imgHeart, imgHuman, imgPlant;
+
+  function preload() {
+    imgHeart = loadImage("3_heart.png");
+    imgHuman = loadImage("4_human.png");
+    imgPlant = loadImage("5_plant.png");
+  }
+
+  // *********************************************
   function setup() {
     createCanvas(windowWidth, windowHeight);
-    textAlign(CENTER, CENTER);
+    noStroke();
+    background(0);
+
+    // 각 단계별 파티클 좌표 생성
+    buildAllStageTargets();
+
+    // 입자를 세포 1단계 위치에서 시작
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      let startPos = stageTargets[0][i].copy();
+      particles.push(new Particle(i, startPos));
+    }
+
+    // 슬라이더 생성
+    slider = createSlider(0, NUM_STAGES - 1, 0, 0.001);
+    slider.style("width", "60%");
+    positionSlider();
   }
 
-  function draw() {
-    background(20, 30, 50);
-    fill(255);
-    textSize(40);
-    text("🌏 운석이 도착했습니다! 🌠", width / 2, height / 2);
-    textSize(20);
-    text("뒤로 가려면 클릭하세요.", width / 2, height / 2 + 60);
-  }
-
-  function mousePressed() {
-    window.location.href = "index.html";
-  }
-
+  // 화면 크기 다를때 다시 렌더링
   function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
+    buildAllStageTargets();
+    positionSlider();
   }
+
+  // 슬라이더 위치 잡기
+  function positionSlider() {
+    slider.position(width * 0.2, height - 40);
+  }
+
+  //*******************************
+  function draw() {
+    background(0);
+
+    // 슬라이더 값 (0 ~ 6)
+    let t = slider.value();
+    let baseStage = floor(t);                         // 현재 단계
+    let nextStage = min(baseStage + 1, NUM_STAGES-1); // 다음 단계
+    let localT = t - baseStage;                       // 현재 단계 안에서의 위치 (0~1)
+
+    // 개별 입자 업데이트
+    for (let p of particles) {
+      p.update(baseStage, nextStage, localT);
+      p.display();
+    }
+  }
+
+  //************************************
+  // 단계별 좌표 구성
+  function buildAllStageTargets() {
+    stageTargets = new Array(NUM_STAGES);
+
+    // 0~2: 세포 분열
+    stageTargets[0] = buildCellTargetsSingle(); // 1개
+    stageTargets[1] = buildCellTargetsDouble(); // 2개
+    stageTargets[2] = buildCellTargetsQuad();   // 4개
+
+    // 3, 4, 6: 이미지
+    stageTargets[3] = buildImageTargets(imgHeart);
+    stageTargets[4] = buildImageTargets(imgHuman);
+    stageTargets[6] = buildImageTargets(imgPlant);
+
+    // 5: 죽음 
+    stageTargets[5] = buildDissolveTargets(stageTargets[4]);
+  }
+
+ // 0. 세포 1개
+  function buildCellTargetsSingle() {
+    let list = [];
+    let cx = width / 2;
+    let cy = height / 2;
+    let baseR = min(width, height) * 0.04;
+
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      let a = random(TWO_PI);
+      let r = random(baseR);
+      list.push(createVector(cx + cos(a)*r, cy + sin(a)*r));
+    }
+    return list;
+  }
+
+  // 1. 세포 2개
+  function buildCellTargetsDouble() {
+    let list = [];
+    let cxL = width/2 - min(width,height)*0.06;
+    let cxR = width/2 + min(width,height)*0.06;
+    let cy = height/2;
+    let baseR = min(width,height)*0.035;
+
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      let center = (i < NUM_PARTICLES/2) ? cxL : cxR;
+      let a = random(TWO_PI);
+      let r = random(baseR);
+      list.push(createVector(center + cos(a)*r, cy + sin(a)*r));
+    }
+    return list;
+  }
+
+  // 2. 세포 4개
+  function buildCellTargetsQuad() {
+    let list = [];
+    let offset = min(width,height)*0.06;
+
+    let centers = [
+      createVector(width/2 - offset, height/2 - offset),
+      createVector(width/2 + offset, height/2 - offset),
+      createVector(width/2 - offset, height/2 + offset),
+      createVector(width/2 + offset, height/2 + offset)
+    ];
+
+    let baseR = min(width,height)*0.03;
+    let groupSize = NUM_PARTICLES / 4;
+
+    // 4개 그룹으로 나누기
+    for (let i = 0; i < NUM_PARTICLES; i++) {
+      let idx = floor(i / groupSize);
+      let c = centers[idx];
+      let a = random(TWO_PI);
+      let r = random(baseR);
+      list.push(createVector(c.x + cos(a)*r, c.y + sin(a)*r));
+    }
+    return list;
+  }
+
+  // 3,4,6. 이미지 기반 
+  function buildImageTargets(img) {
+    let pts = [];
+    img.loadPixels();
+
+    // 이미지 알파 값 있는 곳만 추출
+    let step = 3; 
+    for (let x = 0; x < img.width; x += step) {
+      for (let y = 0; y < img.height; y += step) {
+        if (alpha(img.get(x,y)) > 10) {
+          pts.push(createVector(x,y));
+        }
+      }
+    }
+
+    // 이미지 비어있으면 중앙에 고정
+    if (pts.length === 0) {
+      return Array(NUM_PARTICLES).fill(createVector(width/2,height/2));
+    }
+
+    // 비율 유지, 배치
+    let imgRatio = img.width / img.height;
+    let maxSpan = min(width,height)*0.5;
+    let targetW, targetH;
+
+    if (imgRatio >= 1) {
+      targetW = maxSpan;
+      targetH = maxSpan / imgRatio;
+    } else {
+      targetH = maxSpan;
+      targetW = maxSpan * imgRatio;
+    }
+
+    let cx = width/2;
+    let cy = height/2;
+
+    // 좌표 맵핑
+    let mapped = pts.map(p =>
+      createVector(
+        map(p.x, 0, img.width,  cx - targetW/2, cx + targetW/2),
+        map(p.y, 0, img.height, cy - targetH/2, cy + targetH/2)
+      )
+    );
+
+    // mapped가 부족하면 복제
+    let result = [];
+    while (result.length < NUM_PARTICLES) {
+      result.push(mapped[floor(random(mapped.length))].copy());
+    }
+    return result;
+  }
+
+  // 5. 죽음 -> 흩어지게
+  function buildDissolveTargets(src) {
+    let list = [];
+    for (let v of src) {
+      let a = random(TWO_PI);
+      let d = random(min(width,height)*0.05, min(width,height)*0.25);
+      let offset = p5.Vector.fromAngle(a).mult(d);
+      list.push(v.copy().add(offset));
+    }
+    return list;
+  }
+
+  // **************************************************
+  class Particle {
+    constructor(index, startPos) {
+      this.index = index;
+      this.pos = startPos.copy();
+      this.vel = p5.Vector.random2D().mult(0.3);
+      this.acc = createVector(0, 0);
+
+      // 색 설정
+      let palette = [
+        color(255,210,255),
+        color(200,140,255),
+        color(130,160,255),
+        color(60,70,150)
+      ];
+      this.color = palette[floor(random(palette.length))];
+
+      // 입자 두근거리는 느낌 
+      this.baseSize = random(4, 7);
+      this.pulseAmp = random(1, 3);
+      this.pulseSpeed = random(0.03, 0.06);
+      this.pulsePhase = random(TWO_PI);
+
+      this.jitterSeed = random(10000);
+
+      // 단계 도달 시 바운스
+      this.bounceTimer = 0;
+    }
+
+    update(baseStage, nextStage, localT) {
+
+      // 단계 사이 위치 보간
+      let A = stageTargets[baseStage][this.index];
+      let B = stageTargets[nextStage][this.index];
+      let target = p5.Vector.lerp(A, B, localT);
+
+      if (localT === 0) {
+        this.bounceTimer = 10;
+      }
+
+      if (this.bounceTimer > 0) {
+        let scale = 1 + sin(this.bounceTimer * 0.4) * 0.4;
+        target = p5.Vector.lerp(this.pos, target, scale * 0.25);
+        this.bounceTimer--;
+      }
+
+      let spring = p5.Vector.sub(target, this.pos).mult(0.1);
+      this.applyForce(spring);
+
+      this.vel.mult(0.88);
+
+      let jitterMag = 0.22;
+      if (baseStage <= 2) jitterMag = 0.15;
+      else if (baseStage === 3) jitterMag = 0.30;
+      else if (baseStage === 4) jitterMag = 0.20;
+      else if (baseStage === 5) jitterMag = 0.35;
+      else if (baseStage === 6) jitterMag = 0.10;
+
+      let t = frameCount * 0.01 + this.jitterSeed;
+      let angle = noise(t) * TWO_PI;
+      let jitter = p5.Vector.fromAngle(angle).mult(jitterMag);
+      this.applyForce(jitter);
+
+      this.vel.add(this.acc);
+      this.pos.add(this.vel);
+      this.acc.set(0);
+    }
+
+    applyForce(f) {
+      this.acc.add(f);
+    }
+
+    display() {
+      let pulse = sin(frameCount * this.pulseSpeed + this.pulsePhase);
+      let s = this.baseSize + map(pulse, -1, 1, -this.pulseAmp, this.pulseAmp);
+
+      fill(this.color);
+      ellipse(this.pos.x, this.pos.y, s, s);
+    }
+  }
+
 </script>
 </body>
 </html>

@@ -1,67 +1,150 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>운석</title>
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.0/lib/p5.min.js"></script>
+  <meta charset="UTF-8" />
+  <title>Galaxy Explosion</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
 </head>
-<body style="margin:0; overflow:hidden;">
+<body>
+
 <script>
-  let x, y, speed;
-  let landed = false;
-  let buttonSize = 80;
 
-  function setup() {
-    createCanvas(windowWidth, windowHeight);
-    x = random(100, width - 100);
-    y = -50;
-    speed = random(3, 6);
-    textAlign(CENTER, CENTER);
+let exploded = false;
+let particles = [];
+let timer = 0;
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+}
+
+function draw() {
+  background(0);
+
+  if (!exploded) {
+    drawPlanet(width / 2, height / 2, 300);
+  } else {
+    drawParticles();
+
+    timer++;
+    if (timer > 220) {
+
+    window.location.href = "next.html";
   }
 
-  function draw() {
-    background(10, 10, 30);
+  }
+}
 
-    // 별 배경
-    for (let i = 0; i < 100; i++) {
-      stroke(255);
-      point(random(width), random(height));
+function drawPlanet(x, y, size) {
+  push();
+  translate(x, y);
+  noStroke();
+
+  let g = drawingContext.createRadialGradient(0, 0, size * 0.05, 0, 0, size/2);
+  g.addColorStop(0, "rgba(255,210,255,1)");
+  g.addColorStop(0.4,"rgba(200,140,255,0.95)");
+  g.addColorStop(0.7,"rgba(130,160,255,0.9)");
+  g.addColorStop(1, "rgba(60,70,150,0.9)");
+
+  drawingContext.fillStyle = g;
+  ellipse(0, 0, size);
+
+  pop();
+}
+
+
+// 초신성 폭발
+function createExplosion() {
+  let cx = width / 2;
+  let cy = height / 2;
+
+  const palette = [
+    [255, 210, 255], // 중심
+    [200, 140, 255], 
+    [130, 160, 255], 
+    [60, 70, 150]   // 테두리
+  ];
+
+  for (let i = 0; i < 2000; i++) {
+
+    // 목표 위치
+    let angle = random(TWO_PI);
+    let spiral = angle * random(0.4, 1.2);
+    let streakFactor = pow(random(), 0.25);
+    let radius = streakFactor * random(150, min(width, height) * 0.6);
+
+    let tx = cx + cos(angle + spiral) * radius + random(-40, 40);
+    let ty = cy + sin(angle + spiral) * radius + random(-40, 40);
+
+    // 초기 폭발 속도
+    let vx = (tx - cx) * 0.03;
+    let vy = (ty - cy) * 0.03;
+
+    // 입자 색깔
+    let r = random();
+    let col;
+    if (r < 0.35)      col = palette[0]; 
+    else if (r < 0.65) col = palette[1];
+    else if (r < 0.88) col = palette[2];
+    else               col = palette[3];
+
+    particles.push({
+      x: cx,
+      y: cy,
+      tx: tx,
+      ty: ty,
+      vx: vx,
+      vy: vy,
+      driftVX: vx * 0.03,
+      driftVY: vy * 0.03,
+      progress: 0,
+      size: random(2.5, 5),
+      color: color(col[0], col[1], col[2], 255)
+    });
+  }
+}
+
+function drawParticles() {
+  for (let p of particles) {
+
+    // 1) 폭발: target까지 빠르게 이동
+    if (p.progress < 1) {
+      p.progress += 0.025;
+
+      p.x = lerp(width / 2, p.tx, p.progress);
+      p.y = lerp(height / 2, p.ty, p.progress);
     }
 
-    // 운석 그리기
+    // 2) 이후 폭발했던 방향 그대로 아주 느리게 퍼짐
+    else {
+      p.x += p.driftVX;
+      p.y += p.driftVY;
+
+      // 화면 밖으로 나가지 않도록 
+      p.x = constrain(p.x, 0, width);
+      p.y = constrain(p.y, 0, height);
+    }
+
     noStroke();
-    fill(255, 180, 0);
-    ellipse(x, y, buttonSize, buttonSize);
-
-    if (!landed) {
-      y += speed;
-      if (y + buttonSize / 2 >= height - 60) {
-        landed = true;
-      }
-    } else {
-      fill(255);
-      textSize(24);
-      text("누르면 다음 페이지로 ➜", width / 2, height - 100);
-    }
-
-    // 지표면
-    fill(50, 100, 150);
-    rect(0, height - 60, width, 60);
+    fill(p.color);
+    ellipse(p.x, p.y, p.size);
   }
+}
 
-  function mousePressed() {
-    if (landed) {
-      let d = dist(mouseX, mouseY, x, y);
-      if (d < buttonSize / 2) {
-        // 다음 페이지로 이동
-        window.location.href = "next.html";
-      }
-    }
+function mousePressed() {
+  if (!exploded) {
+    exploded = true;
+    createExplosion();
   }
+}
 
-  function windowResized() {
-    resizeCanvas(windowWidth, windowHeight);
-  }
+function windowResized() {
+  resizeCanvas(windowWidth, height);
+}
+
 </script>
+
 </body>
 </html>

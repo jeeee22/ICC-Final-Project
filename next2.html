@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>particles</title>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.0/lib/p5.min.js"></script>
+</head>
+<body style="margin:0; overflow:hidden;">
+<script>
+
+  let particles = [];
+  let numParticles = 1000;
+  let noiseScale = 0.01;
+  let state = "flow";
+  let img;
+  let targets = [];
+  let edgeFlags = [];   // ⭐ target 픽셀 각각이 경계인지 저장
+
+  function preload() {
+    img = loadImage("cat.png");
+  }
+
+  function setup() {
+    createCanvas(windowWidth, windowHeight);
+    noStroke();
+    background(0);
+
+    img.loadPixels();
+
+    // -------------- target & edge 판별 ----------------
+    function isEdgePixel(x, y) {
+      // 1픽셀 범위의 네 방향 검사
+      const dirs = [
+        [1,0],[-1,0],[0,1],[0,-1]
+      ];
+      for (let d of dirs) {
+        let nx = x + d[0];
+        let ny = y + d[1];
+        if (nx < 0 || nx >= img.width || ny < 0 || ny >= img.height) return true;
+        let c = img.get(nx, ny);
+        if (alpha(c) < 10) return true;
+      }
+      return false;
+    }
+
+    for (let x = 0; x < img.width; x += 4) {
+      for (let y = 0; y < img.height; y += 4) {
+        let c = img.get(x, y);
+        if (alpha(c) > 10) {
+          let tx = map(x, 0, img.width, width/2 - 150, width/2 + 150);
+          let ty = map(y, 0, img.height, height/2 - 150, height/2 + 150);
+          targets.push(createVector(tx, ty));
+
+          edgeFlags.push(isEdgePixel(x, y)); // ⭐ 경계 여부 저장
+        }
+      }
+    }
+
+    // ---------------- 첫페이지 데이터 로드 ----------------
+    let saved = localStorage.getItem("particleData");
+    if (saved) {
+      let arr = JSON.parse(saved);
+      for (let i = 0; i < arr.length && i < numParticles; i++) {
+        particles.push(new Particle(arr[i].x, arr[i].y, arr[i].size));
+      }
+      while (particles.length < numParticles)
+        particles.push(new Particle(random(width), random(height)));
+    } else {
+      for (let i = 0; i < numParticles; i++)
+        particles.push(new Particle(random(width), random(height)));
+    }
+  }
+
+  function draw() {
+    background(0);
+    for (let p of particles) {
+      p.update();
+      p.display();
+    }
+  }
+
+  function mouseDragged() {
+    let dx = mouseX - pmouseX;
+    if (dx > 5) state = "form";
+    else if (dx < -5) state = "flow";
+  }
+
+  // ---------------------------- PARTICLE ----------------------------
+  class Particle {
+
+    constructor(x, y, s = random(4, 7)) {
+      this.pos = createVector(x, y);
+      this.vel = p5.Vector.random2D();
+      this.acc = createVector(0, 0);
+
+      this.color = color(
+        random(220,255),
+        random(120,170),
+        random(230,255),
+        255
+      );
+
+      this.size = s;
+
+      // ⭐ target 하나 고르고 edge 여부도 가져오기
+      let idx = floor(random(targets.length));
+      this.target = targets[idx];
+      this.isEdge = edgeFlags[idx];
+
+      // ⭐ 경계는 offset 없음 (모양 정확 유지)
+      this.offset = this.isEdge
+        ? createVector(0, 0)
+        : p5.Vector.random2D().mult(random(0.5, 1.5));
+
+      this.seed = random(10000);
+    }
+
+    update() {
+
+      // FLOW MODE ----------------------------
+      if (state === "flow") {
+        let n1 = noise(this.pos.x * noiseScale, this.pos.y * noiseScale, frameCount * 0.003);
+        let v1 = p5.Vector.fromAngle(n1 * TWO_PI * 2).mult(0.5);
+        this.applyForce(v1);
+      }
+
+      // FORM MODE ----------------------------
+      else if (state === "form") {
+
+        let stable = p5.Vector.add(this.target, this.offset);
+
+        // ⭐ 경계는 아주 강하게 target에 고정
+        if (this.isEdge) {
+          let fix = p5.Vector.sub(stable, this.pos).mult(0.4);
+          this.applyForce(fix);
+        }
+
+        // ⭐ 내부는 부드럽게 끌리고 부유
+        else {
+          let pull = p5.Vector.sub(stable, this.pos).mult(0.12);
+          this.applyForce(pull);
+
+          let t = frameCount * 0.01 + this.seed;
+          let drift = p5.Vector.fromAngle(noise(t) * TWO_PI).mult(0.25);
+          this.applyForce(drift);
+        }
+
+        this.vel.mult(0.92);
+      }
+
+      this.vel.add(this.acc);
+      this.vel.limit(1.0);
+      this.pos.add(this.vel);
+      this.acc.set(0);
+    }
+
+    applyForce(f) {
+      this.acc.add(f);
+    }
+
+    display() {
+      fill(this.color);
+      ellipse(this.pos.x, this.pos.y, this.size);
+    }
+  }
+
+  function windowResized() {
+    resizeCanvas(windowWidth, windowHeight);
+  }
+
+</script>
+</body>
+</html>
